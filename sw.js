@@ -1,5 +1,5 @@
 // Cache-first Service Worker. Bump CACHE_VERSION on releases.
-const CACHE_VERSION = 'budget-v1';
+const CACHE_VERSION = 'budget-v2';
 const ASSETS = [
   './',
   './index.html',

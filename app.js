@@ -41,7 +41,6 @@ const DEFAULT_STATE = () => ({
 let state = loadState();
 let activeTab = 'entry';
 
-// In-memory ephemeral form state for Eingabe (survives tab switches in same session)
 let entryDraft = {
   amountStr: '',
   categoryId: null,
@@ -55,7 +54,6 @@ function loadState() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_STATE();
     const parsed = JSON.parse(raw);
-    // shallow merge with defaults to tolerate older versions missing keys
     const def = DEFAULT_STATE();
     return { ...def, ...parsed };
   } catch (e) {
@@ -95,8 +93,6 @@ function formatDayHeader(iso) {
   return dayFmt.format(new Date(iso + 'T00:00:00'));
 }
 
-// Parses German-style number string into cents (Integer) or null if invalid.
-// Accepts: "12,50", "1.234,56", "1234,56", "12.50", "1.234", "12", "0,5"
 function parseEURInput(str) {
   if (str == null) return null;
   let s = String(str).trim().replace(/\s/g, '').replace(/€/g, '').trim();
@@ -113,7 +109,6 @@ function parseEURInput(str) {
     } else {
       const last = parts[parts.length - 1];
       if (last.length === 3) {
-        // looks like thousands grouping
         cleaned = parts.join('');
       } else if (last.length === 1 || last.length === 2) {
         cleaned = parts.slice(0, -1).join('') + '.' + last;
@@ -200,7 +195,6 @@ function spentInCategoryForMonth(catId, ym) {
 // ---- Recurring instantiation ----------------------------------------------
 
 function instantiateRecurring() {
-  const today = new Date();
   const todayIsoStr = todayIso();
   const currentYm = todayYearMonth();
   let changed = false;
@@ -211,11 +205,9 @@ function instantiateRecurring() {
     while (ym <= currentYm) {
       if (rec.endYearMonth && ym > rec.endYearMonth) break;
 
-      // Already instantiated for this month?
       const existing = state.transactions.find(t => t.recurringId === rec.id && yearMonthOf(t.date) === ym);
       if (!existing) {
         const dateStr = isoForYmDay(ym, rec.dayOfMonth || 1);
-        // For the current month, only instantiate if date <= today
         const eligible = (ym < currentYm) || (ym === currentYm && dateStr <= todayIsoStr);
         if (eligible) {
           state.transactions.push({
@@ -275,6 +267,9 @@ function setTab(tab) {
 function render() {
   const view = document.getElementById('view');
   view.innerHTML = '';
+  const titles = { entry: 'Neue Ausgabe', overview: 'Übersicht', history: 'Verlauf', recurring: 'Fixkosten', settings: 'Einstellungen' };
+  const titleEl = document.getElementById('view-title');
+  if (titleEl) titleEl.textContent = titles[activeTab] || '';
   if      (activeTab === 'entry')     renderEntry(view);
   else if (activeTab === 'overview')  renderOverview(view);
   else if (activeTab === 'history')   renderHistory(view);
@@ -288,78 +283,66 @@ function renderEntry(root) {
   const cents = parseEURInput(entryDraft.amountStr);
   const preview = cents != null ? formatEUR(cents) : '—';
 
-  // Sort categories: by usage frequency (desc) then alphabetic
-  const usage = new Map();
-  for (const t of state.transactions) {
-    usage.set(t.categoryId, (usage.get(t.categoryId) || 0) + 1);
-  }
-  const sortedCats = [...state.categories].sort((a, b) => {
-    const ua = usage.get(a.id) || 0;
-    const ub = usage.get(b.id) || 0;
-    if (ub !== ua) return ub - ua;
-    return a.name.localeCompare(b.name, 'de');
-  });
+  const potOrder = new Map(state.pots.map((p, i) => [p.id, i]));
+  const sortedCats = state.categories
+    .map((c, i) => ({ c, i }))
+    .sort((a, b) => {
+      const pa = potOrder.has(a.c.potId) ? potOrder.get(a.c.potId) : Infinity;
+      const pb = potOrder.has(b.c.potId) ? potOrder.get(b.c.potId) : Infinity;
+      if (pa !== pb) return pa - pb;
+      return a.i - b.i;
+    })
+    .map(x => x.c);
+
+  const canSave = cents != null && !!entryDraft.categoryId;
 
   root.innerHTML = `
-    <h1>Neue Ausgabe</h1>
-
-    <div class="entry-amount">
-      <input id="amount-input" type="text" inputmode="decimal" autocomplete="off"
-             placeholder="0,00" value="${escapeAttr(entryDraft.amountStr)}">
-      <span class="currency">€</span>
-    </div>
-    <div style="text-align:center; color:var(--fg-faint); font-size:13px; margin-top:-8px; margin-bottom:14px;">
-      ${cents != null ? preview : (entryDraft.amountStr ? 'ungültig' : ' ')}
-    </div>
-
-    <div class="field">
-      <label>Kategorie</label>
-      <div class="cat-grid" id="cat-grid">
-        ${sortedCats.map(c => {
-          const pot = potById(c.potId);
-          const sel = entryDraft.categoryId === c.id ? 'selected' : '';
-          return `<button class="cat-chip ${sel}" data-cat="${c.id}">
-            <span class="dot" style="background:${pot ? pot.color : '#888'}"></span>
-            <span>${escapeHtml(c.name)}</span>
-            <span class="pot-label">${pot ? escapeHtml(pot.name) : ''}</span>
-          </button>`;
-        }).join('')}
-        <button class="cat-chip add" id="cat-add">+ Neue Kategorie</button>
+    <div class="entry-sticky">
+      <div class="entry-amount">
+        <input id="amount-input" type="text" inputmode="decimal" autocomplete="off"
+               enterkeyhint="done"
+               placeholder="0,00" value="${escapeAttr(entryDraft.amountStr)}">
+        <span class="currency">€</span>
+        <button class="save-check ${canSave ? 'active' : ''}" id="save-btn" ${canSave ? '' : 'disabled'} aria-label="Speichern">✓</button>
       </div>
+      <div class="entry-preview" id="entry-preview">${cents == null ? (entryDraft.amountStr ? 'ungültig' : '&nbsp;') : preview}</div>
     </div>
 
-    <div class="field">
-      <label>Notiz (optional)</label>
-      <input id="note-input" type="text" placeholder="z. B. Shell A2"
-             value="${escapeAttr(entryDraft.note)}">
+    <div class="cat-grid" id="cat-grid">
+      ${sortedCats.map(c => {
+        const pot = potById(c.potId);
+        const color = pot ? pot.color : '#888888';
+        const sel = entryDraft.categoryId === c.id;
+        const bg = sel ? color + '55' : color + '22';
+        const bd = sel ? color : color + '44';
+        return `<button class="cat-chip ${sel ? 'selected' : ''}" data-cat="${c.id}" style="background:${bg};border-color:${bd};">
+          <span>${escapeHtml(c.name)}</span>
+        </button>`;
+      }).join('')}
+      <button class="cat-chip add" id="cat-add">+ Neu</button>
     </div>
 
-    <div class="field">
-      <label>Datum</label>
-      <input id="date-input" type="date" value="${entryDraft.date}">
+    <div class="options-row">
+      <input id="note-input" type="text" placeholder="📝 Notiz" value="${escapeAttr(entryDraft.note)}" aria-label="Notiz">
+      <input id="date-input" type="date" value="${entryDraft.date}" aria-label="Datum">
+      <button class="recur-pill ${entryDraft.recurring ? 'on' : ''}" id="recur-toggle" aria-label="Wiederkehrend" aria-pressed="${entryDraft.recurring}">🔁</button>
     </div>
-
-    <div class="toggle-row ${entryDraft.recurring ? 'on' : ''}" id="recur-toggle">
-      <div class="check">${entryDraft.recurring ? '✓' : ''}</div>
-      <div class="label">
-        <div>Wiederkehrend</div>
-        <div class="hint">Automatisch jeden Monat eintragen</div>
-      </div>
-    </div>
-
-    <button class="btn-primary" id="save-btn" ${cents == null || !entryDraft.categoryId ? 'disabled' : ''}>
-      Speichern
-    </button>
   `;
 
   const amtInput = root.querySelector('#amount-input');
+  const previewEl = root.querySelector('#entry-preview');
+  const saveBtn = root.querySelector('#save-btn');
+
   amtInput.addEventListener('input', e => {
     entryDraft.amountStr = e.target.value;
-    // re-render only the preview + button state without losing focus
     const c = parseEURInput(entryDraft.amountStr);
-    root.querySelector('.entry-amount + div').textContent =
-      c != null ? formatEUR(c) : (entryDraft.amountStr ? 'ungültig' : ' ');
-    root.querySelector('#save-btn').disabled = (c == null || !entryDraft.categoryId);
+    previewEl.innerHTML = c != null ? formatEUR(c) : (entryDraft.amountStr ? 'ungültig' : '&nbsp;');
+    const ok = c != null && !!entryDraft.categoryId;
+    saveBtn.disabled = !ok;
+    saveBtn.classList.toggle('active', ok);
+  });
+  amtInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); amtInput.blur(); }
   });
   amtInput.focus();
 
@@ -367,7 +350,6 @@ function renderEntry(root) {
     btn.addEventListener('click', () => {
       entryDraft.categoryId = btn.dataset.cat;
       render();
-      // refocus amount field if empty
       const a = document.getElementById('amount-input');
       if (a && !entryDraft.amountStr) a.focus();
     });
@@ -386,7 +368,7 @@ function renderEntry(root) {
     render();
   });
 
-  root.querySelector('#save-btn').addEventListener('click', saveEntry);
+  saveBtn.addEventListener('click', saveEntry);
 }
 
 function saveEntry() {
@@ -396,7 +378,6 @@ function saveEntry() {
   const cat = categoryById(entryDraft.categoryId);
 
   if (entryDraft.recurring) {
-    // open sheet to confirm dayOfMonth + start month
     const startYm = yearMonthOf(entryDraft.date);
     const dayOfMonth = parseInt(entryDraft.date.slice(-2), 10);
     openRecurringSetupSheet({
@@ -419,7 +400,6 @@ function saveEntry() {
   });
   saveState();
   toast(`✓ ${formatEUR(cents)} · ${cat ? cat.name : ''}`);
-  // reset draft (but keep date as today)
   entryDraft = { amountStr: '', categoryId: null, note: '', date: todayIso(), recurring: false };
   render();
 }
@@ -511,6 +491,33 @@ function openNewCategorySheet() {
 
 let overviewMonth = todayYearMonth();
 
+function renderPotPieSVG(slices, size = 160) {
+  const valid = slices.filter(s => s.value > 0);
+  const total = valid.reduce((s, x) => s + x.value, 0);
+  const r = size / 2;
+  if (total === 0) return '';
+  if (valid.length === 1) {
+    return `<svg class="pot-pie-svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+      <circle cx="${r}" cy="${r}" r="${r - 1}" fill="${valid[0].color}"></circle>
+    </svg>`;
+  }
+  let acc = 0;
+  const paths = valid.map(s => {
+    const start = acc / total;
+    acc += s.value;
+    const end = acc / total;
+    const a0 = start * 2 * Math.PI - Math.PI / 2;
+    const a1 = end * 2 * Math.PI - Math.PI / 2;
+    const x0 = r + r * Math.cos(a0);
+    const y0 = r + r * Math.sin(a0);
+    const x1 = r + r * Math.cos(a1);
+    const y1 = r + r * Math.sin(a1);
+    const large = (end - start) > 0.5 ? 1 : 0;
+    return `<path d="M ${r} ${r} L ${x0} ${y0} A ${r} ${r} 0 ${large} 1 ${x1} ${y1} Z" fill="${s.color}" stroke="var(--bg)" stroke-width="2"></path>`;
+  }).join('');
+  return `<svg class="pot-pie-svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${paths}</svg>`;
+}
+
 function renderOverview(root) {
   const ym = overviewMonth;
   const monthTotal = txsForMonth(ym).reduce((s, t) => s + t.amountCents, 0);
@@ -519,8 +526,14 @@ function renderOverview(root) {
   const next = nextYearMonth(ym);
   const isCurrent = (ym === todayYearMonth());
 
+  const overviewSlices = state.pots
+    .map(p => ({ value: spentInPotForMonth(p.id, ym), color: p.color }))
+    .filter(s => s.value > 0);
+  const overviewPie = overviewSlices.length > 0
+    ? `<div class="pot-pie">${renderPotPieSVG(overviewSlices)}</div>`
+    : '';
+
   root.innerHTML = `
-    <h1>Übersicht</h1>
     <div class="month-switch">
       <button id="month-prev">← ${formatYearMonth(prev)}</button>
       <button class="active">${formatYearMonth(ym)}</button>
@@ -532,6 +545,7 @@ function renderOverview(root) {
     <div class="month-total">
       <div class="label">Diesen Monat ausgegeben</div>
       <div class="amount">${formatEUR(monthTotal)}</div>
+      ${overviewPie}
     </div>
 
     ${state.pots.map(pot => {
@@ -590,13 +604,97 @@ function renderOverview(root) {
 
 // ---- View: Verlauf --------------------------------------------------------
 
+function monthlyTotalsForLastN(n) {
+  const out = [];
+  let ym = todayYearMonth();
+  for (let i = 0; i < n; i++) {
+    const total = txsForMonth(ym).reduce((s, t) => s + t.amountCents, 0);
+    out.unshift({ ym, total, isCurrent: i === 0 });
+    ym = prevYearMonth(ym);
+  }
+  return out;
+}
+
+const MONTH_SHORT = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+function shortMonthLabel(ym) {
+  const m = parseInt(ym.slice(5, 7), 10);
+  return MONTH_SHORT[m - 1] || ym;
+}
+
+function renderHistoryBarChart() {
+  const months = monthlyTotalsForLastN(6);
+  const totalAll = months.reduce((s, m) => s + m.total, 0);
+  if (totalAll === 0) return '';
+
+  const closed = months.filter(m => !m.isCurrent);
+  const closedSum = closed.reduce((s, m) => s + m.total, 0);
+  const closedNonZero = closed.filter(m => m.total > 0);
+  const avg = closedNonZero.length >= 2
+    ? Math.round(closedSum / closed.length)
+    : null;
+
+  const W = 320, H = 130;
+  const padL = 8, padR = 8, padT = 12, padB = 24;
+  const chartW = W - padL - padR;
+  const chartH = H - padT - padB;
+  const n = months.length;
+  const slot = chartW / n;
+  const barW = Math.min(28, slot * 0.6);
+  const maxVal = Math.max(...months.map(m => m.total), avg || 0);
+  const scale = maxVal > 0 ? chartH / maxVal : 0;
+
+  const bars = months.map((m, i) => {
+    const cx = padL + slot * (i + 0.5);
+    const h = m.total * scale;
+    const x = cx - barW / 2;
+    const y = padT + chartH - h;
+    const fill = m.isCurrent ? 'var(--accent)' : 'var(--fg-dim)';
+    const labelY = padT + chartH + 14;
+    return `
+      <rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW}" height="${Math.max(0, h).toFixed(1)}" rx="3" fill="${fill}"></rect>
+      <text x="${cx.toFixed(1)}" y="${labelY}" text-anchor="middle" font-size="10" fill="var(--fg-faint)">${shortMonthLabel(m.ym)}</text>
+    `;
+  }).join('');
+
+  let avgLine = '';
+  if (avg != null && avg > 0) {
+    const y = padT + chartH - avg * scale;
+    avgLine = `
+      <line x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}"
+            stroke="var(--fg-faint)" stroke-width="1" stroke-dasharray="4 3"></line>
+    `;
+  }
+
+  return `<svg class="history-chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+    ${avgLine}
+    ${bars}
+  </svg>`;
+}
+
 function renderHistory(root) {
   const txs = [...state.transactions].sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
   if (txs.length === 0) {
-    root.innerHTML = `<h1>Verlauf</h1><div class="empty">Noch keine Transaktionen.</div>`;
+    root.innerHTML = `<div class="empty">Noch keine Transaktionen.</div>`;
     return;
   }
-  // Group by date
+
+  const months = monthlyTotalsForLastN(6);
+  const current = months[months.length - 1];
+  const closed = months.filter(m => !m.isCurrent);
+  const closedNonZero = closed.filter(m => m.total > 0);
+  const avg = closedNonZero.length >= 2
+    ? Math.round(closed.reduce((s, m) => s + m.total, 0) / closed.length)
+    : null;
+  const chartSvg = renderHistoryBarChart();
+  const chartHtml = chartSvg ? `
+    <div class="history-chart">
+      ${chartSvg}
+      <div class="history-chart-meta">
+        <span>${avg != null ? 'Ø ' + formatEUR(avg) : ' '}</span>
+        <span>aktuell ${formatEUR(current.total)}</span>
+      </div>
+    </div>
+  ` : '';
   const groups = new Map();
   for (const t of txs) {
     if (!groups.has(t.date)) groups.set(t.date, []);
@@ -626,7 +724,7 @@ function renderHistory(root) {
     `;
   }).join('');
 
-  root.innerHTML = `<h1>Verlauf</h1>${groupHtml}`;
+  root.innerHTML = chartHtml + groupHtml;
 
   root.querySelectorAll('.tx').forEach(el => {
     el.addEventListener('click', () => openTxEditSheet(el.dataset.tx));
@@ -694,7 +792,6 @@ function openTxEditSheet(txId) {
 function renderRecurring(root) {
   if (state.recurring.length === 0) {
     root.innerHTML = `
-      <h1>Fixkosten</h1>
       <div class="empty">Noch keine wiederkehrenden Transaktionen.<br>
       Beim Eintragen einer neuen Ausgabe kannst du sie als wiederkehrend markieren.</div>
     `;
@@ -705,7 +802,6 @@ function renderRecurring(root) {
   const activeRecs = state.recurring.filter(r => !r.endYearMonth || r.endYearMonth >= ym);
   const monthlyTotal = activeRecs.reduce((s, r) => s + r.amountCents, 0);
 
-  // Per-pot breakdown
   const perPot = new Map();
   for (const r of activeRecs) {
     const cat = categoryById(r.categoryId);
@@ -714,10 +810,10 @@ function renderRecurring(root) {
   }
 
   root.innerHTML = `
-    <h1>Fixkosten</h1>
     <div class="month-total">
       <div class="label">Aktive Fixkosten / Monat</div>
       <div class="amount">${formatEUR(monthlyTotal)}</div>
+      ${monthlyTotal > 0 ? `<div class="pot-pie">${renderPotPieSVG([...perPot.entries()].map(([pid, sum]) => ({ value: sum, color: (potById(pid) || {}).color || '#888' })))}</div>` : ''}
       <div style="margin-top:10px; font-size:13px; color:var(--fg-dim); display:flex; flex-wrap:wrap; gap:10px; justify-content:center;">
         ${[...perPot.entries()].map(([pid, sum]) => {
           const p = potById(pid);
@@ -795,7 +891,6 @@ function openRecurringEditSheet(recId) {
       if (alsoTxs) {
         state.transactions = state.transactions.filter(t => t.recurringId !== recId);
       } else {
-        // unlink txs so they remain as standalone entries
         state.transactions.forEach(t => { if (t.recurringId === recId) t.recurringId = null; });
       }
       saveState();
@@ -821,8 +916,6 @@ function openRecurringEditSheet(recId) {
 
 function renderSettings(root) {
   root.innerHTML = `
-    <h1>Einstellungen</h1>
-
     <div class="settings-section">
       <h2>Erscheinungsbild</h2>
       <div class="theme-switch">
@@ -1200,7 +1293,6 @@ function init() {
     if (state.theme === 'system') applyTheme();
   });
 
-  // Tabs
   document.querySelectorAll('[data-tab]').forEach(b => {
     b.addEventListener('click', () => setTab(b.dataset.tab));
   });
@@ -1209,7 +1301,6 @@ function init() {
   setTab('entry');
   maybeShowMonthBanner();
 
-  // Service worker
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW reg failed', err));
   }
