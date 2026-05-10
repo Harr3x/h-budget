@@ -4,12 +4,45 @@
 // ============================================================================
 
 const STORAGE_KEY = 'budget.v1';
+const SCHEMA_VERSION = 2;
 const POT_COLORS = [
   '#5dd39e', '#6ea8fe', '#ffd166', '#ef476f',
   '#a78bfa', '#fb923c', '#22d3ee', '#f472b6',
 ];
 
+function migrateState(raw) {
+  const v = raw.schemaVersion || 1;
+
+  // v1 → v2: pots may lack monthlyAmountCents, categories may lack creation-order index
+  if (v < 2) {
+    raw.pots = (raw.pots || []).map(p => ({
+      monthlyAmountCents: null,
+      percent: 0,
+      ...p,
+    }));
+    raw.categories = (raw.categories || []).map(c => ({
+      potId: raw.pots[0]?.id ?? '',
+      ...c,
+    }));
+    raw.recurring = (raw.recurring || []).map(r => ({
+      endYearMonth: null,
+      lastInstantiatedYearMonth: null,
+      note: '',
+      ...r,
+    }));
+    raw.transactions = (raw.transactions || []).map(t => ({
+      recurringId: null,
+      note: '',
+      ...t,
+    }));
+    raw.schemaVersion = 2;
+  }
+
+  return raw;
+}
+
 const DEFAULT_STATE = () => ({
+  schemaVersion: SCHEMA_VERSION,
   income: 300000,
   pots: [
     { id: 'essentials', name: 'Essentials', color: '#5dd39e', percent: 50, monthlyAmountCents: null },
@@ -53,9 +86,10 @@ function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_STATE();
-    const parsed = JSON.parse(raw);
+    let parsed = JSON.parse(raw);
+    parsed = migrateState(parsed);
     const def = DEFAULT_STATE();
-    return { ...def, ...parsed };
+    return { ...def, ...parsed, schemaVersion: SCHEMA_VERSION };
   } catch (e) {
     console.error('loadState failed, using defaults', e);
     return DEFAULT_STATE();
