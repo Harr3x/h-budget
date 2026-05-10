@@ -1252,6 +1252,26 @@ function exportData() {
   toast('Backup heruntergeladen');
 }
 
+function validateImport(parsed) {
+  if (!parsed || typeof parsed !== 'object') return 'Kein gültiges Objekt';
+  if (!Array.isArray(parsed.pots) || parsed.pots.length === 0)
+    return 'Töpfe fehlen oder leer';
+  if (!Array.isArray(parsed.transactions)) return 'Transaktionen fehlen';
+  if (!Array.isArray(parsed.categories) || parsed.categories.length === 0)
+    return 'Kategorien fehlen oder leer';
+  for (const p of parsed.pots) {
+    if (!p.id || !p.name) return 'Topf ohne id/name gefunden';
+  }
+  for (const c of parsed.categories) {
+    if (!c.id || !c.name || !c.potId) return 'Kategorie ohne id/name/potId gefunden';
+  }
+  for (const t of parsed.transactions) {
+    if (!t.id || !t.date || typeof t.amountCents !== 'number')
+      return 'Transaktion ohne id/date/amountCents gefunden';
+  }
+  return null; // valid
+}
+
 function importData(e) {
   const file = e.target.files?.[0];
   if (!file) return;
@@ -1259,13 +1279,11 @@ function importData(e) {
   reader.onload = () => {
     try {
       const parsed = JSON.parse(reader.result);
-      if (!parsed || !Array.isArray(parsed.pots) || !Array.isArray(parsed.transactions)) {
-        toast('Ungültige Datei');
-        return;
-      }
+      const err = validateImport(parsed);
+      if (err) { toast('Ungültige Datei: ' + err); return; }
       if (!confirm('Aktuelle Daten ÜBERSCHREIBEN mit Import?')) return;
       const def = DEFAULT_STATE();
-      state = { ...def, ...parsed };
+      state = { ...def, ...migrateState(parsed) };
       saveState();
       toast('Import erfolgreich');
       render();
