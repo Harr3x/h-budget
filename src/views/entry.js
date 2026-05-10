@@ -85,13 +85,13 @@ export function renderEntry(root) {
   });
   amtInput.focus();
 
-  root.querySelectorAll('.cat-chip[data-cat]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      entryDraft.categoryId = btn.dataset.cat;
-      render();
-      const a = document.getElementById('amount-input');
-      if (a && !entryDraft.amountStr) a.focus();
-    });
+  root.querySelector('#cat-grid').addEventListener('click', e => {
+    const chip = e.target.closest('.cat-chip[data-cat]');
+    if (!chip) return;
+    entryDraft.categoryId = chip.dataset.cat;
+    render();
+    const a = document.getElementById('amount-input');
+    if (a && !entryDraft.amountStr) a.focus();
   });
 
   root.querySelector('#cat-add').addEventListener('click', openNewCategorySheet);

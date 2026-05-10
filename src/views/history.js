@@ -61,8 +61,9 @@ export function renderHistory(root) {
 
   root.innerHTML = chartHtml + groupHtml;
 
-  root.querySelectorAll('.tx').forEach(el => {
-    el.addEventListener('click', () => openTxEditSheet(el.dataset.tx));
+  root.addEventListener('click', e => {
+    const tx = e.target.closest('.tx');
+    if (tx) openTxEditSheet(tx.dataset.tx);
   });
 }
 
