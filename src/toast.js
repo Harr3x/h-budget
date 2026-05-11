@@ -13,7 +13,8 @@ export function openSheet(html, onMount) {
   const bg = document.createElement('div');
   bg.className = 'sheet-bg';
   bg.id = 'sheet-bg';
-  bg.innerHTML = `<div class="sheet" onclick="event.stopPropagation()">${html}</div>`;
+  bg.innerHTML = `<div class="sheet">${html}</div>`;
+  bg.querySelector('.sheet').addEventListener('click', e => e.stopPropagation());
   bg.addEventListener('click', closeSheet);
   document.body.appendChild(bg);
   if (onMount) onMount(bg.querySelector('.sheet'));
