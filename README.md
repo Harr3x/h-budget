@@ -1,20 +1,24 @@
-# Budget
+# H-Budget
 
-Schnelle Ausgaben-Erfassung mit Topf-Übersicht — eine installierbare PWA.
+Eine Budget App wie ich sie mir im App Store gewünscht hätte, aber nie gefunden habe.
+Alle Budget Apps sind total überladen und haben viel zu viele unnötige Features die den Gebrauch unangenehm machen.
 
-**Live:** https://<user>.github.io/h-budget/
+## Features
+
+- Schnelle Transaktionseingabe: Betrag → Kategorie → Fertig!
+- Töpfe: Budget prozentual aufteilen (z.B. 50% Fixkosten, 30% Freizeit, 10% Sparen)
+- Monatsübersicht mit Kreisdiagramm pro Topf
+- Verlauf: Monatliche Ausgaben als Balkendiagramm
+- Wiederkehrende Ausgaben: Fixkosten einmal anlegen, werden automatisch gebucht
+- Hell/Dunkel-Theme (System, Hell oder Dunkel)
+- Monats-Erinnerung beim Monatswechsel
+- Daten-Import/Export als JSON-Backup
+- Läuft vollständig offline (PWA)
+
+**Live:** https://Harr3x.github.io/h-budget/
 
 ## Installieren
 Auf dem Handy im Browser öffnen → "Zum Startbildschirm hinzufügen". Die App läuft danach offline.
 
 ## Tech
 Vanilla JS, localStorage, Service Worker, kein Build-Step.
-
-## Lokale Entwicklung
-```
-python -m http.server 8000
-```
-Dann http://localhost:8000 öffnen.
-
-## Deploy
-Push auf `main` → GitHub Pages baut automatisch neu. **Wichtig:** Bei jedem Release `CACHE_VERSION` in `sw.js` hochzählen (`budget-v1` → `budget-v2` → ...), sonst sehen bestehende Nutzer die alte Version.
