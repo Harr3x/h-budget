@@ -15,7 +15,7 @@ export function instantiateRecurring() {
       const existing = state.transactions.find(t => t.recurringId === rec.id && yearMonthOf(t.date) === ym);
       if (!existing) {
         const dateStr = isoForYmDay(ym, rec.dayOfMonth || 1);
-        const eligible = (ym < currentYm) || (ym === currentYm && dateStr <= todayIsoStr);
+        const eligible = ym <= currentYm;
         if (eligible) {
           state.transactions.push({
             id: uid(),
