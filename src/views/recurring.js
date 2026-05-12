@@ -6,6 +6,8 @@ import { renderPotPieSVG } from '../charts.js';
 import { toast, openSheet, closeSheet } from '../toast.js';
 import { render } from '../render.js';
 
+let sortBy = localStorage.getItem('recurringSortBy') || 'amount';
+
 export function renderRecurring(root) {
   if (state.recurring.length === 0) {
     root.innerHTML = `
@@ -39,7 +41,16 @@ export function renderRecurring(root) {
       </div>
     </div>
 
-    ${state.recurring.map(r => {
+    <div class="sort-bar">
+      <button class="sort-btn ${sortBy === 'amount' ? 'active' : ''}" data-sort="amount">Betrag</button>
+      <button class="sort-btn ${sortBy === 'day' ? 'active' : ''}" data-sort="day">Tag</button>
+    </div>
+
+    ${[...state.recurring].sort((a, b) => {
+      if (sortBy === 'amount') return b.amountCents - a.amountCents;
+      if (sortBy === 'day') return a.dayOfMonth - b.dayOfMonth;
+      return 0;
+    }).map(r => {
       const cat = categoryById(r.categoryId);
       const pot = cat ? potById(cat.potId) : null;
       const ended = r.endYearMonth && r.endYearMonth < ym;
@@ -61,6 +72,14 @@ export function renderRecurring(root) {
       `;
     }).join('')}
   `;
+
+  root.querySelectorAll('.sort-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      sortBy = btn.dataset.sort;
+      localStorage.setItem('recurringSortBy', sortBy);
+      renderRecurring(root);
+    });
+  });
 
   root.querySelectorAll('.rec').forEach(el => {
     el.addEventListener('click', () => openRecurringEditSheet(el.dataset.rec));
