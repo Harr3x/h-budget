@@ -1,5 +1,18 @@
+import { state } from './state.js';
 import { monthlyTotalsForLastN } from './queries.js';
 import { shortMonthLabel } from './formatters.js';
+
+export function shiftColor(hex, factor) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const mix = factor < 0 ? 0 : 255;
+  const f = Math.abs(factor);
+  const nr = Math.round(r + (mix - r) * f);
+  const ng = Math.round(g + (mix - g) * f);
+  const nb = Math.round(b + (mix - b) * f);
+  return `#${nr.toString(16).padStart(2, '0')}${ng.toString(16).padStart(2, '0')}${nb.toString(16).padStart(2, '0')}`;
+}
 
 export function renderPotPieSVG(slices, size = 160) {
   const valid = slices.filter(s => s.value > 0);
@@ -55,7 +68,8 @@ export function renderHistoryBarChart() {
     const h = m.total * scale;
     const x = cx - barW / 2;
     const y = padT + chartH - h;
-    const fill = m.isCurrent ? 'var(--accent)' : 'var(--fg-dim)';
+    const income = state.monthlyIncomes[m.ym] != null ? state.monthlyIncomes[m.ym] : state.income;
+    const fill = m.isCurrent ? 'var(--accent)' : m.total > income ? 'var(--danger)' : '#5dd39e';
     const labelY = padT + chartH + 14;
     return `
       <rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW}" height="${Math.max(0, h).toFixed(1)}" rx="3" fill="${fill}"></rect>
