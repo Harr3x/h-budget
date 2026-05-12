@@ -1,5 +1,5 @@
 export const STORAGE_KEY = 'budget.v1';
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 export const POT_COLORS = [
   '#5dd39e', '#6ea8fe', '#ffd166', '#ef476f',
   '#a78bfa', '#fb923c', '#22d3ee', '#f472b6',
@@ -29,6 +29,7 @@ export const DEFAULT_STATE = () => ({
   ],
   transactions: [],
   recurring: [],
+  monthlyIncomes: {},
   lastReminderShownYearMonth: null,
   theme: 'system',
 });
@@ -59,6 +60,11 @@ export function migrateState(raw) {
       ...t,
     }));
     raw.schemaVersion = 2;
+  }
+
+  if (v < 3) {
+    raw.monthlyIncomes = raw.monthlyIncomes || {};
+    raw.schemaVersion = 3;
   }
 
   return raw;
