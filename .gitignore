@@ -6,3 +6,5 @@ token.json
 node_modules/
 *.log
 CLAUDE.md
+AGENT.md
+docs/superpowers/*
