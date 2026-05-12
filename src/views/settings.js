@@ -18,14 +18,14 @@ export function renderSettings(root) {
     </div>
 
     <div class="settings-section">
-      <h2>Monatliches Netto-Einkommen</h2>
+      <h2>Standard Netto-Einkommen</h2>
       <div class="row">
         <input id="income-input" type="text" inputmode="decimal"
                value="${(state.income/100).toString().replace('.', ',')}">
         <button class="btn-secondary" id="income-save" style="flex:0; padding:12px 16px;">Speichern</button>
       </div>
       <div style="font-size:12px; color:var(--fg-faint); margin-top:6px;">
-        Wird genutzt für Topf-Budgets, die in % definiert sind.
+        Wird genutzt für Topf-Budgets, die in % definiert sind. Monatliche Überschreibung im Budget-Tab.
       </div>
     </div>
 
@@ -80,6 +80,21 @@ export function renderSettings(root) {
         <button class="btn-secondary" id="import-btn">⬆ Importieren</button>
       </div>
       <input type="file" id="import-file" accept="application/json" class="hidden">
+      <button class="btn-secondary" id="csv-import-btn" style="width:100%; margin-top:8px;">CSV importieren</button>
+      <input type="file" id="csv-import-file" accept=".csv" class="hidden">
+      <div style="margin-top:10px; background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:10px 12px; font-size:12px; color:var(--fg-dim);">
+        <div style="font-weight:600; margin-bottom:6px; color:var(--fg);">CSV-Format</div>
+        <div style="display:grid; grid-template-columns:auto 1fr; gap:2px 12px; margin-bottom:8px;">
+          <span style="color:var(--fg-faint);">Trennzeichen</span><span>Semikolon <code>;</code></span>
+          <span style="color:var(--fg-faint);">Datum</span><span><code>TT.MM.JJJJ</code></span>
+          <span style="color:var(--fg-faint);">Betrag</span><span><code>45,50</code> (kein €)</span>
+          <span style="color:var(--fg-faint);">Notiz</span><span>optional</span>
+        </div>
+        <code style="display:block; background:var(--bg-elev); border-radius:6px; padding:6px 8px; font-size:11px; color:var(--fg-dim); word-break:break-all;">datum;betrag;topf;kategorie;notiz<br>12.05.2026;45,50;Lebenshaltung;Lebensmittel;REWE</code>
+        <div style="margin-top:8px; padding:7px 9px; background:var(--bg-elev); border-left:3px solid var(--danger); border-radius:4px; font-size:11px; color:var(--fg);">
+          ⚠ Topf + Kategorie müssen vorher in den Einstellungen angelegt sein — sonst werden die betreffenden Zeilen übersprungen.
+        </div>
+      </div>
       <button class="btn-danger" id="reset-btn" style="width:100%; margin-top:10px;">Alle Daten löschen</button>
     </div>
 
@@ -125,6 +140,8 @@ export function renderSettings(root) {
   root.querySelector('#export-btn').addEventListener('click', exportData);
   root.querySelector('#import-btn').addEventListener('click', () => root.querySelector('#import-file').click());
   root.querySelector('#import-file').addEventListener('change', importData);
+  root.querySelector('#csv-import-btn').addEventListener('click', () => root.querySelector('#csv-import-file').click());
+  root.querySelector('#csv-import-file').addEventListener('change', importCSV);
   root.querySelector('#reset-btn').addEventListener('click', () => {
     if (!confirm('Wirklich ALLE Daten löschen? Das kann nicht rückgängig gemacht werden.')) return;
     if (!confirm('Letzte Warnung: alle Transaktionen, Töpfe, Kategorien und Fixkosten werden gelöscht.')) return;
@@ -293,6 +310,56 @@ export function deleteCategory(catId) {
   state.categories = state.categories.filter(c => c.id !== catId);
   saveState();
   render();
+}
+
+export function importCSV(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const lines = ev.target.result.trim().split(/\r?\n/);
+    if (lines.length < 2) { toast('CSV leer oder keine Daten'); return; }
+    const sep = lines[0].includes(';') ? ';' : ',';
+    const headers = lines[0].toLowerCase().split(sep).map(h => h.trim());
+    const idx = {
+      datum: headers.indexOf('datum'),
+      betrag: headers.indexOf('betrag'),
+      kategorie: headers.indexOf('kategorie'),
+      notiz: headers.indexOf('notiz'),
+    };
+    if (idx.datum < 0 || idx.betrag < 0 || idx.kategorie < 0) {
+      toast('Spalten datum, betrag, kategorie fehlen'); return;
+    }
+    let imported = 0;
+    const skipped = [];
+    for (let i = 1; i < lines.length; i++) {
+      if (!lines[i].trim()) continue;
+      const cols = lines[i].split(sep);
+      const rawDate = cols[idx.datum]?.trim();
+      const rawAmount = cols[idx.betrag]?.trim();
+      const catName = cols[idx.kategorie]?.trim();
+      const dateParts = rawDate?.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+      if (!dateParts) { skipped.push(`Zeile ${i + 1}: ungültiges Datum "${rawDate}"`); continue; }
+      const date = `${dateParts[3]}-${dateParts[2].padStart(2, '0')}-${dateParts[1].padStart(2, '0')}`;
+      const amountCents = parseEURInput(rawAmount);
+      if (amountCents == null) { skipped.push(`Zeile ${i + 1}: ungültiger Betrag "${rawAmount}"`); continue; }
+      const cat = state.categories.find(c => c.name.toLowerCase() === catName?.toLowerCase());
+      if (!cat) { skipped.push(`Zeile ${i + 1}: Kategorie "${catName}" nicht gefunden`); continue; }
+      state.transactions.push({
+        id: uid(), date, amountCents,
+        categoryId: cat.id,
+        note: idx.notiz >= 0 ? (cols[idx.notiz]?.trim() || '') : '',
+        recurringId: null,
+      });
+      imported++;
+    }
+    if (imported > 0) { saveState(); render(); }
+    const msg = `${imported} Transaktionen importiert` + (skipped.length ? `, ${skipped.length} übersprungen` : '');
+    toast(msg);
+    if (skipped.length) console.warn('CSV-Import übersprungen:\n' + skipped.join('\n'));
+    e.target.value = '';
+  };
+  reader.readAsText(file);
 }
 
 export function exportData() {
