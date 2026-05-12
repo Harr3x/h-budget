@@ -7,9 +7,10 @@ export function potOfCategory(catId) {
   const c = categoryById(catId);
   return c ? potById(c.potId) : null;
 }
-export function potBudgetCents(pot) {
+export function potBudgetCents(pot, ym) {
   if (pot.monthlyAmountCents != null) return pot.monthlyAmountCents;
-  return Math.round((state.income * (pot.percent || 0)) / 100);
+  const income = (ym && state.monthlyIncomes[ym] != null) ? state.monthlyIncomes[ym] : state.income;
+  return Math.round((income * (pot.percent || 0)) / 100);
 }
 
 export function txsForMonth(ym) {
