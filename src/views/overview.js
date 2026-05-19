@@ -100,13 +100,10 @@ export function renderOverview(root) {
             const deltaClass = delta === null || Math.abs(delta) < 5 ? ''
               : delta > 0 ? 'over' : 'under';
             return `
-            <div class="cat-row">
-              <span class="dot" style="background:${catColorMap.get(c.id)}"></span>
+            <div class="cat-row" style="--fill-pct:${Math.round((spent / maxCatSpent) * 100)}%; --cat-color:${catColorMap.get(c.id)}">
               <span class="name">${escapeHtml(c.name)}</span>
               <span class="amount">${formatEUR(spent)}</span>
               <span class="cat-pct">${monthTotal > 0 ? Math.round((spent / monthTotal) * 100) : 0}%</span>
-
-              <div class="cat-bar"><div style="width:${Math.round((spent / maxCatSpent) * 100)}%; background:${catColorMap.get(c.id)}"></div></div>
             </div>`;
           }).join('')}
     ` : [...state.pots].sort((a, b) => potBudgetCents(b, ym) - potBudgetCents(a, ym)).map(pot => {
