@@ -8,7 +8,6 @@ import { render } from '../render.js';
 
 export let overviewMonth = todayYearMonth();
 let overviewMode = 'pots'; // 'pots' | 'categories'
-let catBarMode = 'max'; // 'max' | 'total'
 
 export function renderOverview(root) {
   const ym = overviewMonth;
@@ -61,9 +60,7 @@ export function renderOverview(root) {
   let pm = ym;
   for (let i = 0; i < 4; i++) { pm = prevYearMonth(pm); prevMonths.push(pm); }
 
-  const maxCatSpent = catBarMode === 'total'
-    ? (monthTotal > 0 ? monthTotal : 1)
-    : (catRows.length > 0 ? catRows[0].spent : 1);
+  const maxCatSpent = monthTotal > 0 ? monthTotal : 1;
 
   root.innerHTML = `
     <div class="month-switch">
@@ -89,10 +86,7 @@ export function renderOverview(root) {
     </div>
 
     ${overviewMode === 'categories' ? `
-      <div class="sort-bar">
-        <button class="sort-btn ${catBarMode === 'max' ? 'active' : ''}" data-catbar="max">Größte</button>
-        <button class="sort-btn ${catBarMode === 'total' ? 'active' : ''}" data-catbar="total">Gesamt</button>
-      </div>
+
       ${catRows.length === 0
         ? '<div class="empty">Keine Ausgaben diesen Monat.</div>'
         : catRows.map(({ c, spent }) => {
@@ -111,10 +105,7 @@ export function renderOverview(root) {
               <span class="name">${escapeHtml(c.name)}</span>
               <span class="amount">${formatEUR(spent)}</span>
               <span class="cat-pct">${monthTotal > 0 ? Math.round((spent / monthTotal) * 100) : 0}%</span>
-              <div class="cat-avg">
-                ${avgSpent > 0 ? `<span>Ø ${formatEUR(Math.round(avgSpent))}</span>` : '<span></span>'}
-                <span class="${deltaClass}">${deltaText}</span>
-              </div>
+
               <div class="cat-bar"><div style="width:${Math.round((spent / maxCatSpent) * 100)}%; background:${catColorMap.get(c.id)}"></div></div>
             </div>`;
           }).join('')}
@@ -198,12 +189,6 @@ export function renderOverview(root) {
     });
   });
 
-  root.querySelectorAll('[data-catbar]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      catBarMode = btn.dataset.catbar;
-      renderOverview(root);
-    });
-  });
 
   root.querySelectorAll('.pot').forEach(el => {
     el.querySelector('.pot-head').addEventListener('click', () => {

@@ -444,7 +444,7 @@ h2 { font-size: 14px; font-weight: 600; color: var(--fg-dim); text-transform: up
 .view-toggle { display: flex; gap: 8px; margin-bottom: 12px; }
 .toggle-btn { flex: 1; padding: 7px 0; border-radius: 20px; border: 1px solid var(--border); background: var(--bg-elev); color: var(--fg-dim); font-size: 13px; cursor: pointer; }
 .toggle-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-.cat-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 12px 14px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 8px; }
+.cat-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 7px 12px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 4px; }
 .cat-pct { font-size: 12px; color: var(--fg-dim); font-variant-numeric: tabular-nums; }
 .cat-avg { width: 100%; display: flex; justify-content: space-between; font-size: 12px; color: var(--fg-dim); margin-top: 1px; }
 .cat-avg .over { color: var(--danger); }
