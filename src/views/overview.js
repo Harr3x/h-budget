@@ -61,6 +61,8 @@ export function renderOverview(root) {
   for (let i = 0; i < 4; i++) { pm = prevYearMonth(pm); prevMonths.push(pm); }
 
   const maxCatSpent = monthTotal > 0 ? monthTotal : 1;
+  const income = state.monthlyIncomes[ym] != null ? state.monthlyIncomes[ym] : state.income;
+  const globalRemaining = income - monthTotal;
 
   root.innerHTML = `
     <div class="month-switch">
@@ -77,11 +79,18 @@ export function renderOverview(root) {
     </div>
 
     <div class="month-total">
-      <div class="label">Diesen Monat ausgegeben</div>
-      <div class="amount" ${monthTotal > (state.monthlyIncomes[ym] != null ? state.monthlyIncomes[ym] : state.income) ? 'style="color:var(--danger)"' : ''}>${formatEUR(monthTotal)}</div>
+      <div class="label">${globalRemaining < 0 ? 'über Budget' : 'noch übrig'}</div>
+      <div class="amount${globalRemaining < 0 ? ' over' : ''}">${globalRemaining < 0 ? '−' : ''}${formatEUR(Math.abs(globalRemaining))}</div>
       ${overviewMode === 'categories' ? catPie : overviewPie}
-      <div class="month-income" id="month-income-btn">
-        Einkommen: ${formatEUR(state.monthlyIncomes[ym] != null ? state.monthlyIncomes[ym] : state.income)}${state.monthlyIncomes[ym] != null ? '' : ' (Standard)'}  ✎
+      <div class="month-stats">
+        <div class="month-income" id="month-income-btn">
+          <span>Einkommen${state.monthlyIncomes[ym] != null ? '' : ' (Standard)'}  ✎</span>
+          <span>${formatEUR(income)}</span>
+        </div>
+        <div class="month-spent">
+          <span>Ausgaben</span>
+          <span>${formatEUR(monthTotal)}</span>
+        </div>
       </div>
     </div>
 
